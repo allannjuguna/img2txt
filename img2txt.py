@@ -306,33 +306,21 @@ def subpixel_rendering(bigly, ratio, font_cache, use_gpu=True):
 
     return chars
 
-if __name__ == '__main__':
+def main(options):
+    imgname = options['<imgfile>']
+    maxLen = options['--maxLen']
+    clr = options['--color']
+    do_ansi = options['--ansi']
+    fontSize = options['--fontSize']
+    bgcolor = options['--bgcolor']
+    antialias = options['--antialias']
+    dither = options['--dither']
+    target_aspect_ratio = options['--targetAspect']
+    use_gpu = options['--gpu']
+    subpixel_ratio = options['--subpixel']
+    subpixel_font = options['--subpixel-font']
 
-    dct = docopt(__doc__)
-
-    imgname = dct['<imgfile>']
-
-    maxLen = dct['--maxLen']
-
-    clr = dct['--color']
-
-    do_ansi = dct['--ansi']
-
-    fontSize = dct['--fontSize']
-
-    bgcolor = dct['--bgcolor']
-
-    antialias = dct['--antialias']
-
-    dither = dct['--dither']
-
-    target_aspect_ratio = dct['--targetAspect']
-
-    use_gpu = dct['--gpu']
-
-    subpixel_ratio = dct['--subpixel']
-
-    subpixel_font = dct['--subpixel-font']
+    output = ''
 
     try:
         maxLen = float(maxLen)
@@ -390,7 +378,7 @@ if __name__ == '__main__':
             # then when using this reset prior_fg_color to None too
             fill_string = "\x1b[49m"
         fill_string += "\x1b[K"          # does not move the cursor
-        sys.stdout.write(fill_string)
+        output += fill_string
 
         if subpixel_ratio:
             subpixel_ratio = int(subpixel_ratio)
@@ -408,13 +396,12 @@ if __name__ == '__main__':
         else:
             func = lambda pixels, x, y: (char_for_rgb(pixel[x,y]), pixel[x, y])
 
-        sys.stdout.write(
-            ansi.generate_ANSI_from_pixels(pixel, width, height, bgcolor, get_pixel_func=func)[0])
+        output += ansi.generate_ANSI_from_pixels(pixel, width, height, bgcolor, get_pixel_func=func)[0]
 
         # Undo residual color changes, output newline because
         # generate_ANSI_from_pixels does not do so
         # removes all attributes (formatting and colors)
-        sys.stdout.write("\x1b[0m\n")
+        output += "\x1b[0m\n"
     else:
 
         if clr:
@@ -451,7 +438,15 @@ if __name__ == '__main__':
         """
 
         html = template % (fontSize, string)
-        sys.stdout.write(html)
+        output += html
+
+    return output
 
 
+
+if __name__ == '__main__':
+
+    dct = docopt(__doc__)
+    output = main(dct)
+    sys.stdout.write(output)
     sys.stdout.flush()
