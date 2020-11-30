@@ -6,7 +6,7 @@
 ("""
 Usage:
   img2txt.py <imgfile> [--maxLen=<n>] [--fontSize=<n>] [--color] [--ansi]"""
-    """[--bgcolor=<#RRGGBB>] [--targetAspect=<n>] [--antialias] [--dither] [--gpu] [--subpixel=<n>] [--subpixel-font=<font.ttf>]
+    """[--bgcolor=<#RRGGBB>] [--targetAspect=<n>] [--antialias] [--dither] [--subpixel=<n>] [--subpixel-font=<font.ttf>] [--gpu]
   img2txt.py (-h | --help)
 
 Options:
@@ -27,9 +27,9 @@ Options:
   --targetAspect=<n>    resize image to this ratio of width to height. Default is 
                         1.0 (no resize). For a typical terminal where height of a 
                         character is 2x its width, you might want to try 0.5 here
-  --gpu                 perform subpixel rendering with CUDA on GPU.
   --subpixel=<n>        perform subpixel rendering, with scale factor n
   --subpixel-font=<f>   font to assume for subpixel rendering. must be TTF format
+  --gpu                 perform subpixel rendering with CUDA on GPU.
 """)
 
 import sys
