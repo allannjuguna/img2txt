@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-
+# DISPLAY=localhost:0.0 python3 img2txt/img2txt.py --antialias --dither --ansi --targetAspect 0.5 --color --maxLen=64 cat.jpg --subpixel 32 --subpixel-font consola.ttf --gpu
 
 ("""
 Usage:
   img2txt.py <imgfile> [--maxLen=<n>] [--fontSize=<n>] [--color] [--ansi]"""
-    """[--bgcolor=<#RRGGBB>] [--targetAspect=<n>] [--antialias] [--dither] 
+    """[--bgcolor=<#RRGGBB>] [--targetAspect=<n>] [--antialias] [--dither] [--gpu] [--subpixel=<n>] [--subpixel-font=<font.ttf>]
   img2txt.py (-h | --help)
 
 Options:
@@ -26,15 +26,17 @@ Options:
                         transparent pixels drawn as if opaque
   --targetAspect=<n>    resize image to this ratio of width to height. Default is 
                         1.0 (no resize). For a typical terminal where height of a 
-                        character is 2x its width, you might want to try 0.5 here  
+                        character is 2x its width, you might want to try 0.5 here
+  --gpu                 perform subpixel rendering with CUDA on GPU.
+  --subpixel=<n>        perform subpixel rendering, with scale factor n
+  --subpixel-font=<f>   font to assume for subpixel rendering. must be TTF format
 """)
 
 import sys
 from docopt import docopt
-from PIL import Image
+from PIL import Image, ImageFont, ImageDraw
 import ansi
 from graphics_util import alpha_blend
-
 
 def HTMLColorToRGB(colorstring):
     """ convert #RRGGBB to an (R, G, B) tuple """
@@ -102,7 +104,7 @@ def generate_grayscale_for_image(pixels, width, height, bgcolor):
     return string
 
 
-def load_and_resize_image(imgname, antialias, maxLen, aspectRatio):
+def load_and_resize_image(imgname, antialias, maxLen, aspectRatio, align=None):
 
     if aspectRatio is None:
         aspectRatio = 1.0
@@ -132,6 +134,11 @@ def load_and_resize_image(imgname, antialias, maxLen, aspectRatio):
             rate = float(maxLen) / max(new_width, new_height)
             new_width = int(rate * new_width)  
             new_height = int(rate * new_height)
+
+        if align is not None:
+            new_width -= new_width % align
+            new_height -= new_height % align
+
 
         if native_width != new_width or native_height != new_height:
             img = img.resize((new_width, new_height), Image.ANTIALIAS if antialias else Image.NEAREST)
@@ -219,7 +226,85 @@ def dither_image_to_web_palette(img, bgcolor):
 
     return dithered_img
 
+import colorsys
 
+def char_for_rgb(rgba):
+    color = "@#x."
+    # If partial transparency and we have a bgcolor, combine with bg
+    # color
+    if rgba[3] != 255 and bgcolor is not None:
+        rgba = alpha_blend(rgba, bgcolor)
+
+    # Throw away any alpha (either because bgcolor was partially
+    # transparent or had no bg color)
+    # Could make a case to choose character to draw based on alpha but
+    # not going to do that now...
+    rgb = rgba[:3]
+
+    luminosity =  0.21*rgb[0] + 0.72*rgb[1] + 0.07*rgb[2]
+    h,s,v = colorsys.rgb_to_hsv(*rgb)
+    import math
+    vv = math.log(v+1,2)/math.log(256.0,2) # humans perceive shit logarithmically
+    index = int((0.999-min(vv,0.999)) * (len(color)-1))
+    return color[index]
+
+def cache_subpixel_font(ratio, font, palette):
+    font_cache = {}
+    for char in palette:
+        cand_img = Image.new('L', (ratio,ratio))
+        draw = ImageDraw.Draw(cand_img)
+        char_w, char_h = font.getsize(char)
+        draw.text((ratio/2-char_w/2,ratio/2-char_h/2),char,font=font,fill='white')
+        font_cache[char] = cand_img
+    return font_cache
+
+def subpixel_rendering(bigly, ratio, font_cache, use_gpu=True):
+    if use_gpu:
+        import cupy
+    else:
+        import numpy as cupy
+
+    assert bigly.width%ratio == 0 and bigly.height%ratio == 0
+    img_w, img_h = bigly.width, bigly.height
+    out_w, out_h = bigly.width//ratio, bigly.height//ratio
+    # we need to cast to int here to avoid overflow issues
+    bigly=cupy.asarray(bigly.convert('L')).astype(cupy.int16)
+    # dims: (char, x, y)
+    # bigly=cupy.broadcast_to(bigly, (len(font_cache), img_h, img_w))
+    # print(bigly.shape)
+    chars = list(font_cache)
+    patches = cupy.asarray([cupy.asarray(font_cache[c]).astype(cupy.int16) for c in chars]) # upcast to int to avoid overflow issues
+    # print (patches.shape)
+    b = cupy.tile(patches, (out_h,out_w)) # repeat patches on x,y dimension to tile the scaled up image. 1 tile for each pixel
+    # print(b.shape)
+    # print(b)
+    diffs = abs(bigly - b)
+    # print(diffs.shape)
+    # split into individual tiles (output pixels)
+    # print(bigly)
+    # print('-')
+    # print(b[31])
+    # print('=')
+    # print(diffs[31])
+    diffs = diffs.reshape(len(chars),out_h,ratio,out_w,ratio).swapaxes(2,3)
+    # print(diffs[31,0,0])
+    # exit()
+    diffs = diffs.reshape(len(chars),out_h,out_w,ratio*ratio) # flatten innermost (each tile)
+    diffs = cupy.sum(diffs, axis=3) # manhattan norms per tile
+    # print(diffs.shape)
+    # print(diffs)
+    best_char = diffs.argmin(axis=0)
+
+    if use_gpu:
+        cupy.cuda.Stream.null.synchronize()
+
+    # print(best_char)
+    chars = [[chars[int(best_char[j,i])] for i in range(out_w)] for j in range(out_h)]
+    # print (chars)
+
+    # exit()
+
+    return chars
 
 if __name__ == '__main__':
 
@@ -242,6 +327,12 @@ if __name__ == '__main__':
     dither = dct['--dither']
 
     target_aspect_ratio = dct['--targetAspect']
+
+    use_gpu = dct['--gpu']
+
+    subpixel_ratio = dct['--subpixel']
+
+    subpixel_font = dct['--subpixel-font']
 
     try:
         maxLen = float(maxLen)
@@ -301,8 +392,24 @@ if __name__ == '__main__':
         fill_string += "\x1b[K"          # does not move the cursor
         sys.stdout.write(fill_string)
 
+        if subpixel_ratio:
+            subpixel_ratio = int(subpixel_ratio)
+            img = load_and_resize_image(imgname, antialias, maxLen*subpixel_ratio, target_aspect_ratio,align=subpixel_ratio)
+
+            if subpixel_font is not None:
+                font = ImageFont.truetype(subpixel_font, subpixel_ratio)
+            else:
+                font = ImageFont.load_default()
+            palette = '`1234567890-=~!@#$%^&*()_+qwertyuiop[]\\QWERTYUIOP{}|ASDFGHJKL:"asdfghjkl;\'ZXCVBNM<>?zxcvbnm,./'
+            font_cache = cache_subpixel_font(subpixel_ratio, font, palette)
+            chars = subpixel_rendering(img, subpixel_ratio,font_cache,use_gpu)
+
+            func = lambda pixels, x, y: (chars[y][x], pixel[x, y])
+        else:
+            func = lambda pixels, x, y: (char_for_rgb(pixel[x,y]), pixel[x, y])
+
         sys.stdout.write(
-            ansi.generate_ANSI_from_pixels(pixel, width, height, bgcolor)[0])
+            ansi.generate_ANSI_from_pixels(pixel, width, height, bgcolor, get_pixel_func=func)[0])
 
         # Undo residual color changes, output newline because
         # generate_ANSI_from_pixels does not do so
