@@ -258,7 +258,7 @@ def cache_subpixel_font(ratio, font, palette):
         font_cache[char] = cand_img
     return font_cache
 
-def subpixel_rendering(bigly, ratio, font_cache, use_gpu=True):
+def subpixel_rendering(bigly, ratio, font_cache, use_gpu=True,brightness_gain=32):
     if use_gpu:
         import cupy
     else:
@@ -269,6 +269,7 @@ def subpixel_rendering(bigly, ratio, font_cache, use_gpu=True):
     out_w, out_h = bigly.width//ratio, bigly.height//ratio
     # we need to cast to int here to avoid overflow issues
     bigly=cupy.asarray(bigly.convert('L')).astype(cupy.int16)
+    bigly=bigly+brightness_gain
     # dims: (char, x, y)
     # bigly=cupy.broadcast_to(bigly, (len(font_cache), img_h, img_w))
     # print(bigly.shape)
