@@ -5,6 +5,9 @@ Image to Ascii Text, can output to html or ansi terminal.
 
 See also [gif2txt](https://github.com/hit9/gif2txt) for animated version.
 
+Supports "subpixel" rendering by choosing characters strategically.
+And that is even hardware-accelerated with CUDA if you want. LOL
+
 Example
 -------
 
@@ -13,7 +16,7 @@ Example
 1. `img2txt.py jiaozhu.jpg > without-color.html` : [demo](http://hit9.github.io/img2txt/example/without-color.html)
 2. `img2txt.py jiaozhu.jpg --dither > without-color-dither.html` : [demo](http://hit9.github.io/img2txt/example/without-color-dither.html)
 3. `img2txt.py jiaozhu.jpg --color > with-color.html`: [demo](http://hit9.github.io/img2txt/example/with-color.html)
-4. `img2txt.py jiaozhu.jpg --ansi`: [demo](http://hit9.github.io/img2txt/example/ansi-terminal.png)
+4. `img2txt.py jiaozhu.jpg --dither --antialias --ansi --subpixel 32`: ![demo](example/subpixel.png)
 
 Installation
 ------------
@@ -29,7 +32,7 @@ Usage
 
 ```
 Usage:
-  img2txt.py <imgfile> [--maxLen=<n>] [--fontSize=<n>] [--color] [--ansi] [--bgcolor=<#RRGGBB>] [--targetAspect=<n>] [--antialias] [--dither]
+  img2txt.py <imgfile> [--maxLen=<n>] [--fontSize=<n>] [--color] [--ansi] [--bgcolor=<#RRGGBB>] [--targetAspect=<n>] [--antialias] [--dither] [--subpixel=<n>] [--subpixel-font=<font.ttf>] [--gpu]
   img2txt.py (-h | --help)
 
 Options:
@@ -50,6 +53,9 @@ Options:
   --targetAspect=<n>    resize image to this ratio of width to height. Default is
                         1.0 (no resize). For a typical terminal where height of a
                         character is 2x its width, you might want to try 0.5 here
+  --subpixel=<n>        perform subpixel rendering, with scale factor n
+  --subpixel-font=<f>   font to assume for subpixel rendering. must be TTF format
+  --gpu                 perform subpixel rendering with CUDA on GPU.
 ```
 
 Authors
@@ -59,6 +65,7 @@ Authors
 - @shakib609 (#10)
 - @mattaudesse (#11)
 - @hit9
+- @stong
 
 License
 -------
