@@ -279,8 +279,7 @@ def subpixel_rendering(bigly, ratio, font_cache, use_gpu=True,brightness_gain=32
     b = cupy.tile(patches, (out_h,out_w)) # repeat patches on x,y dimension to tile the scaled up image. 1 tile for each pixel
     # print(b.shape)
     # print(b)
-    diffs = bigly - b
-    diffs = cupy.square(diffs).view(cupy.uint16) # cast to unsigned to avoid overflow
+    diffs = cupy.abs(bigly - b)
     # print(diffs.shape)
     # split into individual tiles (output pixels)
     # print(bigly)
@@ -293,7 +292,6 @@ def subpixel_rendering(bigly, ratio, font_cache, use_gpu=True,brightness_gain=32
     # exit()
     diffs = diffs.reshape(len(chars),out_h,out_w,ratio*ratio) # flatten innermost (each tile)
     diffs = cupy.sum(diffs, axis=3, dtype=cupy.uint32) # manhattan norms per tile
-    diffs = cupy.sqrt(diffs)
     # print(diffs.shape)
     # print(diffs)
     best_char = diffs.argmin(axis=0)
