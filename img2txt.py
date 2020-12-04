@@ -269,7 +269,7 @@ def subpixel_rendering(bigly, ratio, font_cache, use_gpu=True,brightness_gain=32
     out_w, out_h = bigly.width//ratio, bigly.height//ratio
     # we need to cast to int here to avoid overflow issues
     bigly=cupy.asarray(bigly.convert('L')).astype(cupy.int16)
-    bigly=bigly+brightness_gain
+    bigly=cupy.clip(bigly+brightness_gain,None,255)
     # dims: (char, x, y)
     # bigly=cupy.broadcast_to(bigly, (len(font_cache), img_h, img_w))
     # print(bigly.shape)
@@ -280,7 +280,7 @@ def subpixel_rendering(bigly, ratio, font_cache, use_gpu=True,brightness_gain=32
     # print(b.shape)
     # print(b)
     diffs = bigly - b
-    diffs = cupy.square(diffs).astype(cupy.uint16) # cast to unsigned to avoid overflow
+    diffs = cupy.square(diffs).view(cupy.uint16) # cast to unsigned to avoid overflow
     # print(diffs.shape)
     # split into individual tiles (output pixels)
     # print(bigly)
@@ -292,7 +292,7 @@ def subpixel_rendering(bigly, ratio, font_cache, use_gpu=True,brightness_gain=32
     # print(diffs[31,0,0])
     # exit()
     diffs = diffs.reshape(len(chars),out_h,out_w,ratio*ratio) # flatten innermost (each tile)
-    diffs = cupy.sum(diffs, axis=3) # manhattan norms per tile
+    diffs = cupy.sum(diffs, axis=3, dtype=cupy.uint32) # manhattan norms per tile
     diffs = cupy.sqrt(diffs)
     # print(diffs.shape)
     # print(diffs)
